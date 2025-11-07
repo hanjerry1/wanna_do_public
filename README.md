@@ -1,11 +1,12 @@
 # wanna_do_public
 
-![워너두 어플리케이션 설계도.png](attachment:dd1ec399-2fae-4215-b6f6-141c4da66f9e:워너두_어플리케이션_설계도.png)
+워너두 앱 포트폴리오 소개 및 설명링크: https://marvelous-cantaloupe-01b.notion.site/86cca8895735425db84a7084f8b19e0f?v=a50dcc5fe3e74fa9a31aa962d39a5c15&source=copy_link
 
-flutter 프로젝트 구성
+
+flutter 파일 구성
+📂 lib/
 
 - 앱 주요 화면 구성에 필요한 공용 위젯 및 페이지 뷰 관리
-📂 lib/
 🧩 component
 challenge_page_view.dart
 challenges_home.dart
@@ -83,3 +84,9 @@ firebase_options.dart
 main.dart
 
 
+Firebase 백엔드 로직을 위한 Node.js 기반 함수 폴더
+☁️ functions
+.gitignore
+index.js
+package.json
+package-lock.json
