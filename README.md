@@ -1,6 +1,7 @@
 # wanna_do_public
 
-워너두 앱 포트폴리오 소개 및 설명링크: https://marvelous-cantaloupe-01b.notion.site/86cca8895735425db84a7084f8b19e0f?v=a50dcc5fe3e74fa9a31aa962d39a5c15&source=copy_link
+워너두 앱 포트폴리오 소개 및 설명링크: 
+https://marvelous-cantaloupe-01b.notion.site/86cca8895735425db84a7084f8b19e0f?v=a50dcc5fe3e74fa9a31aa962d39a5c15&source=copy_link
 
 
 flutter 파일 구성
