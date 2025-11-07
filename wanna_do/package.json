@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@bootpay/backend-js": "^2.1.9"
+  }
+}

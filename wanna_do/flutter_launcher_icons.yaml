@@ -1,0 +1,7 @@
+flutter_icons:
+  ios: true
+  android: true
+  image_path: "asset/img/wanna_do_logo_white.png"
+  remove_alpha_ios: true
+
+# dart run flutter_launcher_icons:main

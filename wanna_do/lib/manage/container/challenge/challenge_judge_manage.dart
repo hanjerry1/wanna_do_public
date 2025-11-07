@@ -1,0 +1,391 @@
+import 'dart:io';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:lottie/lottie.dart';
+import 'package:wanna_do/manage/container/challenge/challenge_judge_detail.dart';
+import 'package:wanna_do/model/challenge/challenge_model.dart';
+import 'package:wanna_do/model/checkup/request_queue_model.dart';
+import 'package:wanna_do/style/appbar_style.dart';
+import 'package:wanna_do/style/button_style.dart';
+import 'package:wanna_do/style/loading_style.dart';
+import 'package:wanna_do/style/text_style.dart';
+import 'package:wanna_do/style/toast_style.dart';
+import 'package:wanna_do/util/util_tool.dart';
+
+class ChallengeJudgeManage extends StatefulWidget {
+  const ChallengeJudgeManage({super.key});
+
+  @override
+  State<ChallengeJudgeManage> createState() => _ChallengeJudgeManageState();
+}
+
+class _ChallengeJudgeManageState extends State<ChallengeJudgeManage> {
+  final String authUid = FirebaseAuth.instance.currentUser!.uid;
+  bool isLoading = false;
+  int selectedButtonIndex = 0;
+  List<DocumentSnapshot> challengeList = [];
+  final List<String> buttonStatusTexts = [
+    '체크업 미등록',
+    '체크업 등록',
+    '애매',
+    '검사중',
+  ];
+
+  Future<void> checkChallenge(
+      DocumentSnapshot challengeSnapshot, ChallengeModel data) async {
+    try {
+      String deviceId = '';
+
+      QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('checkup')
+          .where('docId', isEqualTo: data.docId)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        setState(() {
+          isLoading = false;
+        });
+        ErrorGetxToast.show(context, '새로고침 해주세요', '존재하지 않는 문서이거나 네트워크 오류에요');
+        return;
+      }
+
+      DocumentSnapshot checkupDoc = querySnapshot.docs.first;
+      DocumentReference docRef = querySnapshot.docs.first.reference;
+
+      if (checkupDoc.get('checkingState') != 'checking') {
+        if (Platform.isAndroid) {
+          AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
+          deviceId = androidInfo.id;
+        } else if (Platform.isIOS) {
+          IosDeviceInfo iosInfo = await DeviceInfoPlugin().iosInfo;
+          deviceId = iosInfo.identifierForVendor!;
+        }
+
+        RequestQueueModel requestQueueModel = RequestQueueModel(
+          uid: authUid,
+          deviceInfo: deviceId,
+        );
+
+        await docRef.collection('requestQueue').add(requestQueueModel.toJson());
+
+        QuerySnapshot requestQueueSnapshot = await docRef
+            .collection('requestQueue')
+            .orderBy('createdAt', descending: false)
+            .limit(1)
+            .get();
+
+        if (requestQueueSnapshot.docs.isEmpty) {
+          setState(() {
+            isLoading = false;
+          });
+          ErrorGetxToast.show(context, '이미 검사중인 챌린지에요', '다른 챌린지를 검사해주세요');
+          return;
+        }
+
+        DocumentSnapshot requestQueueDoc = requestQueueSnapshot.docs.first;
+
+        RequestQueueModel requestQueueData = RequestQueueModel.fromJson(
+          requestQueueDoc.data() as Map<String, dynamic>,
+        );
+
+        if (requestQueueData.uid == authUid &&
+            requestQueueData.deviceInfo == deviceId) {
+          await docRef.update({
+            'checkingState': 'checking',
+          });
+
+          Get.to(() => ChallengeJudgeDetail(
+                    challengeSnapshot: challengeSnapshot,
+                  ))!
+              .then((value) {
+            setState(() {
+              isLoading = false;
+            });
+          });
+        } else {
+          setState(() {
+            isLoading = false;
+          });
+          ErrorGetxToast.show(context, '이미 검사중인 챌린지에요', '다른 챌린지를 검사해주세요');
+          return;
+        }
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        ErrorGetxToast.show(context, '이미 검사중인 챌린지에요', '다른 챌린지를 검사해주세요');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      ErrorGetxToast.show(context, '네트워크를 확인해주세요', '오류가 계속되면 MY탭에서 문의해주세요');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Scaffold(
+          backgroundColor: Colors.white,
+          appBar: SubAppBar(),
+          body: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Container(
+                  width: MediaQuery.of(context).size.width,
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: List.generate(4, (index) {
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              selectedButtonIndex = index;
+                            });
+                          },
+                          child: StateButtonFirst(
+                            widgetText: buttonStatusTexts[index],
+                            isSelected: selectedButtonIndex == index,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: 20),
+              Expanded(
+                child: CustomMaterialIndicator(
+                  elevation: 0,
+                  backgroundColor: Colors.white,
+                  onRefresh: () async {
+                    setState(() {});
+                  },
+                  indicatorBuilder: (context, controller) {
+                    return Lottie.asset(
+                      'asset/lottie/short_loading_first_animation.json',
+                      height: 100,
+                    );
+                  },
+                  child: ScrollConfiguration(
+                    behavior: NoGlowScrollBehavior(),
+                    child: FutureBuilder<QuerySnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('checkup')
+                          .where('status', isEqualTo: 'certify')
+                          .orderBy('certifyAt', descending: false)
+                          .limit(20)
+                          .get(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return Container(
+                            height: 300,
+                            child: Center(
+                              child: Lottie.asset(
+                                'asset/lottie/short_loading_first_animation.json',
+                                height: 100,
+                              ),
+                            ),
+                          );
+                        }
+
+                        List<DocumentSnapshot> docTotalList = [];
+                        List<DocumentSnapshot> docUnPostList = [];
+                        List<DocumentSnapshot> docPostList = [];
+                        List<DocumentSnapshot> docIffyList = [];
+                        List<DocumentSnapshot> docCheckingList = [];
+                        List<DocumentSnapshot> docFutureList = [];
+
+                        for (var doc in snapshot.data!.docs) {
+                          docTotalList.add(doc);
+                        }
+
+                        docUnPostList = docTotalList
+                            .where((doc) =>
+                                (doc.get('isVisible') == false &&
+                                    doc.get('checkingState') == 'none') ||
+                                (doc.get('reportState') != 'able' &&
+                                    doc.get('checkingState') == 'none'))
+                            .toList();
+
+                        docPostList = docTotalList
+                            .where((doc) =>
+                                doc.get('isVisible') == true &&
+                                doc.get('checkingState') == 'none')
+                            .toList();
+
+                        docIffyList = docTotalList
+                            .where((doc) => doc.get('checkingState') == 'iffy')
+                            .toList();
+
+                        docCheckingList = docTotalList
+                            .where(
+                                (doc) => doc.get('checkingState') == 'checking')
+                            .toList();
+
+                        switch (selectedButtonIndex) {
+                          case 0:
+                            docFutureList = docUnPostList;
+                            break;
+                          case 1:
+                            docFutureList = docPostList;
+                            break;
+                          case 2:
+                            docFutureList = docIffyList;
+                            break;
+                          case 3:
+                            docFutureList = docCheckingList;
+                            break;
+                          default:
+                            docFutureList = docUnPostList;
+                        }
+
+                        if (docFutureList.isEmpty) {
+                          return Container(
+                            width: MediaQuery.of(context).size.width,
+                            height: 300,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Lottie.asset(
+                                    'asset/lottie/wanna_do_checker_animation.json',
+                                    height: 200,
+                                  ),
+                                  Text(
+                                    '아직 여기에는 챌린지 기록이 없어요',
+                                    style: font15w400,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ListView.separated(
+                          itemBuilder: (BuildContext context, int index) {
+                            DocumentSnapshot challengeSnapshot =
+                                docFutureList[index];
+
+                            ChallengeModel data = ChallengeModel.fromJson(
+                              challengeSnapshot.data() as Map<String, dynamic>,
+                            );
+
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16.0, vertical: 8.0),
+                              child: GestureDetector(
+                                onTap: () async {
+                                  try {
+                                    setState(() {
+                                      isLoading = true;
+                                    });
+                                    if (data.checkingState == 'iffy' ||
+                                        (selectedButtonIndex == 3 &&
+                                            data.checkingState == 'checking')) {
+                                      Get.to(() => ChallengeJudgeDetail(
+                                                challengeSnapshot:
+                                                    challengeSnapshot,
+                                              ))!
+                                          .then((value) {
+                                        setState(() {
+                                          isLoading = false;
+                                        });
+                                      });
+                                    } else {
+                                      await checkChallenge(
+                                          challengeSnapshot, data);
+                                    }
+                                  } catch (e) {
+                                    setState(() {
+                                      isLoading = false;
+                                    });
+                                    ErrorGetxToast.show(context, '새로고침 해주세요',
+                                        '존재하지 않는 문서이거나 네트워크 오류에요');
+                                  }
+                                },
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '${data.category} | ${data.goal}',
+                                                  style: font16w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 10),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  '내기금액: ${data.betPoint}',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 5),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'uid: ${data.uid}',
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 5),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                    '인증일: ${data.certifyAt!.toDate().toString()}'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Icon(
+                                      Icons.chevron_right_outlined,
+                                      color: Colors.black.withOpacity(0.5),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          separatorBuilder: (BuildContext context, int index) {
+                            return Divider();
+                          },
+                          itemCount: docFutureList.length,
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isLoading) ShortLoadingFirst(),
+      ],
+    );
+  }
+}
